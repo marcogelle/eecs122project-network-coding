@@ -12,7 +12,7 @@ def populate_bits(src, num_packets):
     Inputs:
         src (node): starting node of network
     """
-    # FIXME?: currently assumes the graph is directed and acylclic. Probably safe to assume this though.
+    # FIXME?: currently assumes the graph is directed and acyclic. Probably safe to assume this though.
     # Traverse the network with BFS
     queue = deque([src])
     while queue:
@@ -22,7 +22,7 @@ def populate_bits(src, num_packets):
         if node == src:
             available_bits = list(range(1, num_packets + 1))
         else:
-            available_bits = [l.bit for l in node.incoming_links]
+            available_bits = list({l.bit for l in node.incoming_links})
         random.shuffle(available_bits)
 
         for link in node.outgoing_links:
@@ -31,12 +31,44 @@ def populate_bits(src, num_packets):
                 if node == src:
                     available_bits = list(range(1, num_packets + 1))
                 else:
-                    available_bits = [l.bit for l in node.incoming_links]
+                    available_bits = list({l.bit for l in node.incoming_links})
                 random.shuffle(available_bits)
 
             # assign a bit to the outgoing link
             link.bit = available_bits.pop()
 
+            queue.append(link.to_node)
+
+# Helper function to determine bits on links in the network coding case
+def populate_bits_NC(src, num_packets):
+    # FIXME?: currently assumes the graph is directed and acyclic. Probably safe to assume this though.
+    # Traverse the network with BFS
+    queue = deque([src])
+    while queue:
+        node = queue.popleft()
+
+        # prepare to randomly choose bits (most constrained option)
+        if node == src:
+            available_bits = list(range(1, num_packets + 1))
+            random.shuffle(available_bits)
+        else:
+            available_bits = list({l.bit for l in node.incoming_links})
+
+        for link in node.outgoing_links:
+            if node == src:
+                # refill available_bits if we assigned everything already
+                if not available_bits:
+                    available_bits = list(range(1, num_packets + 1))
+                    random.shuffle(available_bits)
+                link.bit = available_bits.pop()
+            else:
+                # case when we need to implement network coding    
+                if len(available_bits) > 1:
+                    link.bit = 3
+                # assign a bit to the outgoing link
+                else:
+                    link.bit = available_bits[0]
+                    
             queue.append(link.to_node)
 
 ##########################################
@@ -55,7 +87,7 @@ def simulate(src, dst_list, num_packets):
     Output:
         (float) Network throughput
     """
-    if num_packets != len(src.outgoing_links):
+    if num_packets != len(src.outgoing_links) or num_packets != 2:
         print("Not supported currently :(")
         return   
 
@@ -74,7 +106,7 @@ def simulate(src, dst_list, num_packets):
 
     return network_throughput
 
-def simulate_NC(src, dst_list):
+def simulate_NC(src, dst_list, num_packets):
     """ 
     Modifies the network connected to the specified source node, then
     outputs the maximum achievable throughput using network coding.
@@ -84,7 +116,25 @@ def simulate_NC(src, dst_list):
     Output:
         (float) Maximum achievable network throughput
     """
-    pass
+    if num_packets != len(src.outgoing_links) or num_packets != 2:
+        print("Not supported currently :(")
+        return   
+
+    populate_bits_NC(src, num_packets)
+
+    # Taking the average node throughput for network throughput.
+    # Assumes a symmetric network.
+    # TODO: decode the xor'd bits
+    network_throughput = 0
+    for dst_node in dst_list:
+        received_bits = set()
+        for in_link in dst_node.incoming_links:
+            received_bits.add(in_link.bit)
+        node_throughput = max(len(received_bits), num_packets)
+        network_throughput += node_throughput
+    network_throughput /= len(dst_list)
+
+    return network_throughput
 
 def simulate_average(src, dst_list, num_packets, trials):
     """
@@ -178,6 +228,11 @@ if __name__ == '__main__':
     source.print_network()
     print()
 
+    # # Reset network topology
+    # source, dst_list, num_packets = fig_5_15()
+
     # Simulate with network coding
+    nc_net_throughput = simulate_NC(source, dst_list, num_packets)
     print("===== With Network Coding =====")
-    print('not implemented')
+    print("Network Throughput =", nc_net_throughput)
+    source.print_network()
