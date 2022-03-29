@@ -1,27 +1,44 @@
 from graph import *
+import random
+from collections import deque
 
 # Constants
 R = 1
 
 # Helper function to determine bits on links in the non-network coding case
-def populate_bits(src):
+def populate_bits(src, num_packets):
     """
     Fills in the bit values on each link in a multicasted, non-network coded network.
     Inputs:
         src (node): starting node of network
     """
-    def fill_same_bits(node, bit):
-        for link in node.outgoing_links:
-            if link.bit == 0:
-                link.bit = bit
-                fill_same_bits(link.to_node, bit)
+    # FIXME?: currently assumes the graph is directed and acylclic. Probably safe to assume this though.
+    # Traverse the network with BFS
+    queue = deque([src])
+    while queue:
+        node = queue.popleft()
 
-    bit_num = 1
-    for link in src.outgoing_links:
-        if link.bit == 0:
-            link.bit = bit_num
-            fill_same_bits(link.to_node, bit_num)
-        bit_num += 1    
+        # prepare to randomly choose bits (most constrained option)
+        if node == src:
+            available_bits = list(range(1, num_packets + 1))
+        else:
+            available_bits = [l.bit for l in node.incoming_links]
+        random.shuffle(available_bits)
+
+        for link in node.outgoing_links:
+            # refill available_bits if we assigned everything already
+            if not available_bits:
+                if node == src:
+                    available_bits = list(range(1, num_packets + 1))
+                else:
+                    available_bits = [l.bit for l in node.incoming_links]
+                random.shuffle(available_bits)
+
+            # assign a bit to the outgoing link
+            link.bit = available_bits.pop()
+
+            queue.append(link.to_node)
+
 
 # Simulute Multicast Throughput without Network Coding on above topology
 def simulate(src, dst_list, num_packets):
@@ -38,7 +55,7 @@ def simulate(src, dst_list, num_packets):
         print("Not supported currently :(")
         return   
 
-    populate_bits(src)
+    populate_bits(src, num_packets)
 
     # FIXME due to being sus: network throughput is average of dest node throughputs
     network_throughput = 0
@@ -96,9 +113,32 @@ def fig_5_15():
     num_packets = 2
     return node_s, [node_y, node_z], num_packets
 
+def fig_5_15_no_X():
+    """
+    Creates the textbook example, but with no X node.
+    """
+    node_s = Node("S")
+    node_t = Node("T")
+    node_u = Node("U")
+    node_w = Node("W")
+    node_y = Node("Y")
+    node_z = Node("Z")
+
+    create_link(node_s, node_t, R)
+    create_link(node_s, node_u, R)
+    create_link(node_t, node_w, R)
+    create_link(node_t, node_y, R)
+    create_link(node_u, node_w, R)
+    create_link(node_u, node_z, R)
+    create_link(node_w, node_y, R)
+    create_link(node_w, node_z, R)
+
+    num_packets = 2
+    return node_s, [node_y, node_z], num_packets
+
 if __name__ == '__main__':
     # Initialize network topology
-    source, dst_list, num_packets = fig_5_15()
+    source, dst_list, num_packets = fig_5_15_no_X()
 
     # Simulate without network coding
     net_throughput = simulate(source, dst_list, num_packets)
@@ -106,5 +146,7 @@ if __name__ == '__main__':
     print("Network throughput =", net_throughput)
     source.print_network()
     print()
+
+    # Simulate with network coding
     print("===== With Network Coding =====")
     print('not implemented')
