@@ -39,17 +39,21 @@ def populate_bits(src, num_packets):
 
             queue.append(link.to_node)
 
+##########################################
+#### Throughput Calculation Functions ####
+##########################################
 
-# Simulute Multicast Throughput without Network Coding on above topology
 def simulate(src, dst_list, num_packets):
     """ 
     Modifies the network connected to the specified source node, then
-    outputs the maximum achievable throughput.
+    outputs the network throughput, which depends on how we probabilistically
+    assign bits to links. Does not use network coding.
     Inputs:
         src (node): source node
         dst_list (List[node]): list of destination nodes to be multicasted to
+        num_packets (int): number of distinct packets/bits
     Output:
-        (float) Maximum achievable network throughput
+        (float) Network throughput
     """
     if num_packets != len(src.outgoing_links):
         print("Not supported currently :(")
@@ -57,7 +61,8 @@ def simulate(src, dst_list, num_packets):
 
     populate_bits(src, num_packets)
 
-    # FIXME due to being sus: network throughput is average of dest node throughputs
+    # Taking the average node throughput for network throughput.
+    # Assumes a symmetric network.
     network_throughput = 0
     for dst_node in dst_list:
         received_bits = set()
@@ -69,18 +74,39 @@ def simulate(src, dst_list, num_packets):
 
     return network_throughput
 
-# Simulute Multicast Throughput with Network Coding on above topology
 def simulate_NC(src, dst_list):
     """ 
     Modifies the network connected to the specified source node, then
-    outputs the maximum achievable throughput.
+    outputs the maximum achievable throughput using network coding.
     Inputs:
         src (node): source node
         dst_list (List[node]): list of destination nodes to be multicasted to
     Output:
-        (float) Maximum achievable throughput
+        (float) Maximum achievable network throughput
     """
     pass
+
+def simulate_average(src, dst_list, num_packets, trials):
+    """
+    Runs simulate(...) `trials` number of times, then returns the average throughput
+    for this network (without network coding).
+    Inputs:
+        src (node): source node
+        dst_list (List[node]): list of destination nodes to be multicasted to
+        num_packets (int): number of distinct packets/bits
+        trials (int): number of times to simulate
+    Output:
+        (float) Average network throughput
+    """
+    network_throughput = 0
+    for _ in range(trials):
+        network_throughput += simulate(src, dst_list, num_packets)
+    network_throughput /= trials
+    return network_throughput
+
+###############################
+#### Hard-coded Topologies ####
+###############################
 
 def fig_5_15():
     """
@@ -136,14 +162,19 @@ def fig_5_15_no_X():
     num_packets = 2
     return node_s, [node_y, node_z], num_packets
 
+#####################
+#### Main Method ####
+#####################
+
 if __name__ == '__main__':
     # Initialize network topology
     source, dst_list, num_packets = fig_5_15_no_X()
 
     # Simulate without network coding
-    net_throughput = simulate(source, dst_list, num_packets)
+    trials = 500
+    net_throughput = simulate_average(source, dst_list, num_packets, trials)
     print("===== Without Network Coding =====")
-    print("Network throughput =", net_throughput)
+    print("Average network throughput using", trials, "trials =", net_throughput)
     source.print_network()
     print()
 
