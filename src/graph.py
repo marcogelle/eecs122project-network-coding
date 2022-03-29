@@ -52,7 +52,4 @@ def create_link(src, dst, rate):
         src.outgoing_links.append(link)
         dst.incoming_links.append(link)
 
-def update_incoming_link(src, dst):
-   for link in dst.incoming_links:
-    if src.id == link.id:
-       link = (src, 1, )
+
