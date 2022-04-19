@@ -42,7 +42,7 @@ def populate_bits(src, num_packets):
                 queue.append(link.to_node)
         else:
             available_bits = list({l.bit for l in node.incoming_links})
-            mem_used += max(1, min(len(available_bits), len(list({l.bit for l in node.outgoing_links}))))
+            mem_used += max(1, min(len(available_bits), len([l.bit for l in node.outgoing_links])))
             for link in node.outgoing_links:
                 # assign a bit to the outgoing link
                 link.bit = random.sample(available_bits, 1)[0]
@@ -77,7 +77,7 @@ def populate_bits_NC(src, num_packets):
                 queue.append(link.to_node)
         else:
             num_unique_incoming = len({l.bit for l in node.incoming_links})
-            mem_used += num_unique_incoming
+            mem_used += min(num_unique_incoming, 2)
 
             for link in node.outgoing_links:
                 # case when we need to implement network coding    
@@ -364,17 +364,40 @@ def fig_custom_2():
     create_link(node_l3_1, node_t1, R)
     create_link(node_l3_1, node_t2, R)
 
+    num_packets = 2
+    return node_s, [node_t1, node_t2], num_packets
+
 #####################
 #### Main Method ####
 #####################
-    
+
+def main_all_topologies():
+    trials = 1000
+    print("Number of Trials:", trials, "\n")
+
+    figs = [fig_5_15, fig_5_15_no_X, fig_crown, fig_crown_custom, fig_custom_2]
+    fig_strings = ['fig_5_15', 'fig_5_15_no_X', 'fig_crown', 'fig_crown_custom', 'fig_custom_2']
+    for fig, fig_string in zip(figs, fig_strings):
+        print("====================")
+        print("Figure:", fig_string)
+        source, dst_list, num_packets = fig()
+
+        net_throughput, mem_used = simulate_max(source, dst_list, num_packets, trials)
+        print("(WITHOUT Network Coding)\t Network Throughput:  ", net_throughput, "\tMemory Used:  ", mem_used)
+
+        nc_net_throughput, nc_mem_used = simulate_NC_max(source, dst_list, num_packets, trials)
+        print("(Network Coding)\t\t Network Throughput: ", nc_net_throughput, "\tMemory Used:  ", nc_mem_used)
+
+        print("Throughput to memory cost ratio: ", (nc_net_throughput/net_throughput)/(nc_mem_used/mem_used))
+        print()
+
 # Taller crown than main_crown; custom example
 def main():
     # source, dst_list, num_packets = fig_5_15()
-    source, dst_list, num_packets = fig_5_15_no_X()
+    # source, dst_list, num_packets = fig_5_15_no_X()
     # source, dst_list, num_packets = fig_crown()
     # source, dst_list, num_packets = fig_crown_custom()
-    # source, dst_list, num_packets = fig_custom_2()
+    source, dst_list, num_packets = fig_custom_2()
     trials = 1000
     print("Number of Trials:", trials)
 
@@ -396,4 +419,5 @@ def main():
     print("Throughput to memory cost ratio: ", (nc_net_throughput/net_throughput)/(nc_mem_used/mem_used))
 
 if __name__ == '__main__':
-    main()
+    # main()
+    main_all_topologies()
