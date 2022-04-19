@@ -18,30 +18,37 @@ def populate_bits(src, num_packets):
     # Traverse the network with BFS
 
     mem_used = 0
+    visited = set()
     queue = deque([src])
     while queue:
         node = queue.popleft()
-        # prepare to randomly choose bits (most constrained option)
+        if node in visited:
+            continue
+        visited.add(node)
+        
         if node == src:
             available_bits = [1, 2]
+            random.shuffle(available_bits)
+            
+            for link in node.outgoing_links:
+                # refill available_bits if we assigned everything already
+                if not available_bits:
+                    available_bits = [1, 2]
+                    random.shuffle(available_bits)
+
+                # assign a bit to the outgoing link
+                link.bit = available_bits.pop()
+
+                queue.append(link.to_node)
         else:
             available_bits = list({l.bit for l in node.incoming_links})
             mem_used += max(1, min(len(available_bits), len(list({l.bit for l in node.outgoing_links}))))
-        random.shuffle(available_bits)
+            for link in node.outgoing_links:
+                # assign a bit to the outgoing link
+                link.bit = random.sample(available_bits, 1)[0]
 
-        for link in node.outgoing_links:
-            # refill available_bits if we assigned everything already
-            if not available_bits:
-                if node == src:
-                    available_bits = [1, 2]
-                else:
-                    available_bits = list({l.bit for l in node.incoming_links})
-                random.shuffle(available_bits)
-
-            # assign a bit to the outgoing link
-            link.bit = available_bits.pop()
-
-            queue.append(link.to_node)
+                queue.append(link.to_node)
+    return mem_used
 
 # Helper function to determine bits on links in the network coding case
 def populate_bits_NC(src, num_packets):
@@ -49,9 +56,13 @@ def populate_bits_NC(src, num_packets):
     # Traverse the network with BFS
 
     mem_used = 0
+    visited = set()
     queue = deque([src])
     while queue:
         node = queue.popleft()
+        if node in visited:
+            continue
+        visited.add(node)
 
         # prepare to randomly choose bits (most constrained option)
         if node == src:
@@ -66,22 +77,19 @@ def populate_bits_NC(src, num_packets):
                 queue.append(link.to_node)
         else:
             num_unique_incoming = len({l.bit for l in node.incoming_links})
-            mem_used += len(available_bits)
-            available_bits = [1, 2, 1^2]
+            mem_used += num_unique_incoming
 
             for link in node.outgoing_links:
                 # case when we need to implement network coding    
                 if num_unique_incoming > 1:
-                    if not available_bits:
-                        available_bits = [1, 2, 1^2]
-                        random.shuffle(available_bits)
-                    link.bit = available_bits.pop()
+                    available_bits = [1, 2, 1^2]
+                    link.bit = random.sample(available_bits, 1)[0]
                 # assign a bit to the outgoing link
                 else:
                     link.bit = node.incoming_links[0]
                     
                 queue.append(link.to_node)
-
+    return mem_used
 ##########################################
 #### Throughput Calculation Functions ####
 ##########################################
@@ -102,7 +110,7 @@ def simulate(src, dst_list, num_packets):
         print("Number of packets/outgoing source links not supported currently :(")
         return   
 
-    populate_bits(src, num_packets)
+    mem_used = populate_bits(src, num_packets)
 
     # Taking the average node throughput for network throughput.
     # Assumes a symmetric network.
@@ -115,7 +123,7 @@ def simulate(src, dst_list, num_packets):
         network_throughput += node_throughput
     network_throughput /= len(dst_list)
 
-    return network_throughput
+    return network_throughput, mem_used
 
 def simulate_NC(src, dst_list, num_packets):
     """ 
@@ -131,7 +139,7 @@ def simulate_NC(src, dst_list, num_packets):
         print("Number of packets/outgoing source links not supported currently :(")
         return   
 
-    populate_bits_NC(src, num_packets)
+    mem_used = populate_bits_NC(src, num_packets)
 
     # Taking the average node throughput for network throughput.
     # Assumes a symmetric network.
@@ -145,7 +153,7 @@ def simulate_NC(src, dst_list, num_packets):
         network_throughput += node_throughput
     network_throughput /= len(dst_list)
 
-    return network_throughput
+    return network_throughput, mem_used
 
 def simulate_average(src, dst_list, num_packets, trials):
     """
@@ -167,15 +175,23 @@ def simulate_average(src, dst_list, num_packets, trials):
 
 def simulate_max(src, dst_list, num_packets, trials):
     network_throughput = float('-inf')
+    mem_used = 0
     for _ in range(trials):
-        network_throughput = max(network_throughput, simulate(src, dst_list, num_packets))
-    return network_throughput
+        t, m = simulate(src, dst_list, num_packets)
+        if t > network_throughput:
+            network_throughput = t
+            mem_used = m
+    return network_throughput, mem_used
 
 def simulate_NC_max(src, dst_list, num_packets, trials):
     network_throughput = float('-inf')
+    mem_used = 0
     for _ in range(trials):
-        network_throughput = max(network_throughput, simulate_NC(src, dst_list, num_packets))
-    return network_throughput
+        t, m = simulate_NC(src, dst_list, num_packets)
+        if t > network_throughput:
+            network_throughput = t
+            mem_used = m
+    return network_throughput, mem_used
 
 
 ###############################
@@ -307,6 +323,46 @@ def fig_crown_custom():
     num_packets = 2
     return node_s, [node_t1, node_t2, node_t3], num_packets
 
+def fig_custom_2():
+    """
+    Creates a one-source, two-sink network. This network has 3 outgoing links from the source.
+    This is a custom topology.
+    """
+    # Source
+    node_s = Node("S")
+
+    # Layer 1
+    node_l1_1 = Node("L1_1")
+    node_l1_2 = Node("L1_2")
+    node_l1_3 = Node("L1_3")
+
+    # Layer 2
+    node_l2_1 = Node("L2_1")
+    node_l2_2 = Node("L2_2")
+
+    # Layer 3
+    node_l3_1 = Node("L3_1")
+
+    # Destination nodes
+    node_t1 = Node("T1")
+    node_t2 = Node("T2")
+
+    create_link(node_s, node_l1_1, R)
+    create_link(node_s, node_l1_2, R)
+    create_link(node_s, node_l1_3, R)
+
+    create_link(node_l1_1, node_t1, R)
+    create_link(node_l1_1, node_l2_1, R)
+    create_link(node_l1_2, node_l2_1, R)
+    create_link(node_l1_2, node_l2_2, R)
+    create_link(node_l1_3, node_l2_2, R)
+    create_link(node_l1_3, node_t2, R)
+
+    create_link(node_l2_1, node_l3_1, R)
+    create_link(node_l2_2, node_l3_1, R)
+
+    create_link(node_l3_1, node_t1, R)
+    create_link(node_l3_1, node_t2, R)
 
 #####################
 #### Main Method ####
@@ -315,23 +371,29 @@ def fig_crown_custom():
 # Taller crown than main_crown; custom example
 def main():
     # source, dst_list, num_packets = fig_5_15()
-    # source, dst_list, num_packets = fig_5_15_no_X()
+    source, dst_list, num_packets = fig_5_15_no_X()
     # source, dst_list, num_packets = fig_crown()
-    source, dst_list, num_packets = fig_crown_custom()
-    trials = 500
+    # source, dst_list, num_packets = fig_crown_custom()
+    # source, dst_list, num_packets = fig_custom_2()
+    trials = 1000
+    print("Number of Trials:", trials)
 
     # Simulate withOUT network coding
-    net_throughput = simulate_max(source, dst_list, num_packets, trials)
+    net_throughput, mem_used = simulate_max(source, dst_list, num_packets, trials)
     print("===== Without Network Coding =====")
-    print("Average network throughput using", trials, "trials =", net_throughput)
+    #print("Average network throughput using ", trials, "trials =", net_throughput)
+    print("Network Throughput:  ", net_throughput, "Memory Used:  ", mem_used)
     source.print_network()
     print()
 
     # Simulate with network coding
-    nc_net_throughput = simulate_NC_max(source, dst_list, num_packets, trials)
+    nc_net_throughput, nc_mem_used = simulate_NC_max(source, dst_list, num_packets, trials)
     print("===== With Network Coding =====")
-    print("Network Throughput =", nc_net_throughput)
+    print("Network Throughput: ", nc_net_throughput, "Memory Used:  ", nc_mem_used)
     source.print_network() 
+
+    print()
+    print("Throughput to memory cost ratio: ", (nc_net_throughput/net_throughput)/(nc_mem_used/mem_used))
 
 if __name__ == '__main__':
     main()
